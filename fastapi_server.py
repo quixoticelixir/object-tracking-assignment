@@ -1,12 +1,19 @@
 from fastapi import FastAPI, WebSocket
-from track_3 import track_data, country_balls_amount
 import asyncio
 import glob
+
+from track_5_10_05 import track_data, country_balls_amount
+
+from models import EasyModel
+from metrics import CustomTrackingMetric
 
 app = FastAPI(title='Tracker assignment')
 imgs = glob.glob('imgs/*')
 country_balls = [{'cb_id': x, 'img': imgs[x % len(imgs)]} for x in range(country_balls_amount)]
 print('Started')
+
+# Инициализирую свою первую модель для tracker_soft()
+easy_model = EasyModel()
 
 
 def tracker_soft(el):
@@ -24,7 +31,8 @@ def tracker_soft(el):
     вашего трекера, использовать его в алгоритме трекера запрещено
     - запрещается присваивать один и тот же track_id разным объектам на одном фрейме
     """
-    return el
+    answer = easy_model.predict(el)
+    return answer
 
 
 def tracker_strong(el):
@@ -46,6 +54,7 @@ def tracker_strong(el):
     P.S.: если вам нужны сами фреймы, измените в index.html значение make_screenshot
     на true для первого прогона, на повторном прогоне можете читать фреймы из папки
     и по координатам вырезать необходимые регионы.
+    TODO: Ужасный костыль, на следующий поток поправить
     """
     return el
 
@@ -57,12 +66,22 @@ async def websocket_endpoint(websocket: WebSocket):
     # отправка служебной информации для инициализации объектов
     # класса CountryBall на фронте
     await websocket.send_text(str(country_balls))
+
+    metric_model = CustomTrackingMetric()
     for el in track_data:
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.1)
         # TODO: part 1
         el = tracker_soft(el)
         # TODO: part 2
         # el = tracker_strong(el)
         # отправка информации по фрейму
         await websocket.send_json(el)
+
+        # для подсчета метрики
+        predict = easy_model.predict(el)
+        metric_model.add_row(predict)
+
+    metrics = metric_model.calculate_metric()
+
+    print('Quality: ', metrics)
     print('Bye..')
